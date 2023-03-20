@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <unordered_map>
+#include <unordered_set>
+#include <set>
 
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/LLVMContext.h"
@@ -25,11 +27,155 @@ using namespace llvm;
 
 #define INF 0x3f3f3f3f
 
-std::string getOpLabel(const llvm::Value *op);
-std::string getSimpleNodeLabel(BasicBlock *Node);
-
 std::unordered_map<std::string, int> min_vals;
 std::unordered_map<std::string, int> max_vals;
+std::unordered_set<std::string> var_names;
+
+int getMinVal(std::string op)
+{
+    if (op[0] != '%')
+    {
+        // if op is constant return the number
+        return std::stoi(op);
+    }
+    return min_vals.count(op) ? min_vals[op] : -INF;
+}
+
+void update_MinVals(std::string res, int num)
+{
+    // if num is less or equal to -INF no need to update
+    if (num <= -INF)
+    {
+        return;
+    }
+    min_vals[res] = num;
+}
+
+int getMaxVal(std::string op)
+{
+    if (op[0] != '%')
+    {
+        // if op is constant return the number
+        return std::stoi(op);
+    }
+    return max_vals.count(op) ? max_vals[op] : INF;
+}
+
+void update_MaxVals(std::string res, int num)
+{
+    // if num is greater than or equal to INF no need to update
+    if (num >= INF)
+    {
+        return;
+    }
+    max_vals[res] = num;
+}
+
+std::vector<int> getMinMaxPair(std::string op0, std::string op1, char cal)
+{
+    std::vector<int> ans;
+    int op0_min = min_vals.count(op0) ? min_vals[op0] : -INF;
+    int op0_max = max_vals.count(op0) ? max_vals[op0] : INF;
+
+    int op1_min = min_vals.count(op1) ? min_vals[op1] : -INF;
+    int op1_max = max_vals.count(op1) ? max_vals[op1] : INF;
+
+    if (cal == '*')
+    {
+        for (int x : {op0_min, op0_max})
+        {
+            for (int y : {op1_min, op1_max})
+            {
+                ans.push_back(x * y);
+            }
+        }
+    }
+    else if (cal == '/')
+    {
+        for (int x : {op0_min, op0_max})
+        {
+            for (int y : {op1_min, op1_max})
+            {
+                ans.push_back(x / y);
+            }
+        }
+    }
+    else if (cal == '%')
+    {
+        for (int x : {op0_min, op0_max})
+        {
+            for (int y : {op1_min, op1_max})
+            {
+                ans.push_back(x % y);
+            }
+        }
+    }
+    else
+    {
+        errs() << "Wrong binary operator: " << cal << '\n';
+        exit(-1);
+    }
+    std::sort(ans.begin(), ans.end());
+    return {ans[0], *(ans.rbegin())};
+}
+
+int max_diff(std::string name0, std::string name1)
+{
+    std::set<int> diffs;
+    int min0 = min_vals.count(name0) ? min_vals[name0] : -INF;
+    int max0 = max_vals.count(name0) ? max_vals[name0] : INF;
+    int min1 = min_vals.count(name1) ? min_vals[name1] : -INF;
+    int max1 = max_vals.count(name1) ? max_vals[name1] : INF;
+
+    for (auto i : {min0, max0})
+    {
+        for (auto j : {min1, max1})
+        {
+            diffs.insert(abs(i - j));
+        }
+    }
+    return *diffs.rbegin();
+}
+
+void cal_diff()
+{
+    for (auto i = var_names.begin(); i != var_names.end(); ++i)
+    {
+        auto j = std::next(i, 1);
+        while (j != var_names.end())
+        {
+            std::string name0 = *i;
+            std::string name1 = *j;
+            int diff = max_diff(name0, name1);
+            std::string diff_str = diff >= INF ? "INF" : std::to_string(diff);
+            llvm::outs() << "Difference between " << name0 << " and " << name1 << ": " << diff_str << '\n';
+            std::advance(j, 1);
+        }
+    }
+}
+
+std::string getOpLabel(const llvm::Value *op)
+{
+    if (!op->getName().empty())
+    {
+        return op->getName().str();
+    }
+
+    std::string str;
+    raw_string_ostream OS(str);
+    op->printAsOperand(OS, false);
+    return OS.str();
+}
+
+std::string getSimpleNodeLabel(BasicBlock *Node)
+{
+    if (!Node->getName().empty())
+        return Node->getName().str();
+    std::string Str;
+    raw_string_ostream OS(Str);
+    Node->printAsOperand(OS, false);
+    return OS.str();
+}
 
 // Helper method for converting the name of a LLVM type to a string
 static std::string LLVMTypeAsString(const Type *T)
@@ -98,6 +244,7 @@ int main(int argc, char **argv)
                         llvm::AllocaInst *allocainst = llvm::dyn_cast<llvm::AllocaInst>(&i);
                         llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
                         std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
                         if (min_vals.count(result))
                         {
                             min_vals.erase(result);
@@ -121,27 +268,139 @@ int main(int argc, char **argv)
 
                         llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
                         std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
 
-                        int add0 = INF, add1 = INF;
-                        bool is_op0_cons = op0[0] == '%' ? false : true;
-                        bool is_op1_cons = op1[0] == '%' ? false : true;
-                        if(is_op0_cons && is_op1_cons){
-                            int res = std::stoi(op0) + std::stoi(op1);
-                        }
+                        int _min = getMinVal(op0) + getMinVal(op1);
+                        int _max = getMaxVal(op0) + getMaxVal(op1);
+
+                        update_MinVals(result, _min);
+                        update_MaxVals(result, _max);
+                        break;
                     }
+                    case llvm::Instruction::Sub:
+                    {
+                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                        llvm::Value *operand0 = binaryinst->getOperand(0);
+                        llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                        std::string op0 = getOpLabel(operand0);
+                        std::string op1 = getOpLabel(operand1);
+
+                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                        std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
+
+                        int _min = getMinVal(op0) - getMaxVal(op1);
+                        int _max = getMaxVal(op0) + getMinVal(op1);
+
+                        update_MinVals(result, _min);
+                        update_MaxVals(result, _max);
+                        break;
+                    }
+                    case llvm::Instruction::Mul:
+                    {
+                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                        llvm::Value *operand0 = binaryinst->getOperand(0);
+                        llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                        std::string op0 = getOpLabel(operand0);
+                        std::string op1 = getOpLabel(operand1);
+
+                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                        std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
+
+                        std::vector<int> min_max = getMinMaxPair(op0, op1, '*');
+                        int _min = min_max[0];
+                        int _max = min_max[1];
+                        update_MinVals(result, _min);
+                        update_MaxVals(result, _max);
+                        break;
+                    }
+                    case llvm::Instruction::SDiv:
+                    {
+                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                        llvm::Value *operand0 = binaryinst->getOperand(0);
+                        llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                        std::string op0 = getOpLabel(operand0);
+                        std::string op1 = getOpLabel(operand1);
+
+                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                        std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
+
+                        std::vector<int> min_max = getMinMaxPair(op0, op1, '/');
+                        int _min = min_max[0];
+                        int _max = min_max[1];
+                        update_MinVals(result, _min);
+                        update_MaxVals(result, _max);
+                        break;
+                    }
+                    case llvm::Instruction::SRem:
+                    {
+                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                        llvm::Value *operand0 = binaryinst->getOperand(0);
+                        llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                        std::string op0 = getOpLabel(operand0);
+                        std::string op1 = getOpLabel(operand1);
+
+                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                        std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
+
+                        std::vector<int> min_max = getMinMaxPair(op0, op1, '%');
+                        int _min = min_max[0];
+                        int _max = min_max[1];
+                        update_MinVals(result, _min);
+                        update_MaxVals(result, _max);
+                        break;
+                    }
+                    case llvm::Instruction::Load:
+                    {
+                        llvm::LoadInst *loadinst = llvm::dyn_cast<llvm::LoadInst>(&i);
+                        llvm::Value *operand = loadinst->getOperand(0);
+                        std::string op = getOpLabel(operand);
+
+                        llvm::Value *returnval = llvm::cast<llvm::Value>(loadinst);
+                        std::string result = getOpLabel(returnval);
+                        var_names.insert(result);
+
+                        int _min = getMinVal(op);
+                        int _max = getMaxVal(op);
+
+                        update_MinVals(result, _min);
+                        update_MaxVals(result, _max);
+                        break;
+                    }
+                    case llvm::Instruction::Store:
+                    {
+                        // store op0 -> op1
+                        llvm::StoreInst *storeinst = llvm::dyn_cast<llvm::StoreInst>(&i);
+                        llvm::Value *operand0 = storeinst->getOperand(0);
+                        llvm::Value *operand1 = storeinst->getOperand(1);
+
+                        std::string op0 = getOpLabel(operand0);
+                        std::string op1 = getOpLabel(operand1);
+
+                        int _min = getMinVal(op0);
+                        int _max = getMaxVal(op0);
+
+                        update_MinVals(op1, _min);
+                        update_MaxVals(op1, _max);
+                    }
+                    default:
+                        break;
                     }
                 }
+
+                //
+                std::string bb_name = getSimpleNodeLabel(&bb);
+                const llvm::Instruction *TInst = bb.getTerminator();
+                llvm::outs() << bb_name << ": " << '\n';
+                cal_diff();
             }
         }
     }
-}
-
-std::string getSimpleNodeLabel(BasicBlock *Node)
-{
-    if (!Node->getName().empty())
-        return Node->getName().str();
-    std::string Str;
-    raw_string_ostream OS(Str);
-    Node->printAsOperand(OS, false);
-    return OS.str();
 }
