@@ -31,6 +31,7 @@ std::unordered_map<std::string, int> min_vals;
 std::unordered_map<std::string, int> max_vals;
 std::unordered_set<std::string> var_names;
 std::unordered_set<std::string> avoidBB;
+std::unordered_set<std::string> avoidBBLoop;
 
 int getMinVal(std::string op)
 {
@@ -193,6 +194,311 @@ public:
 
 char GVNames::ID = 0;
 
+void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::unordered_set<std::string> &avoidBB)
+{
+    avoidBB.clear();
+    bool jumpTrue = false, jumpFalse = false;
+
+    for (auto it = loopHead; it != loopTail; ++it)
+    {
+        BasicBlock *bb = &*it;
+        if (avoidBB.count(bb->getName().str()))
+        {
+            continue;
+        }
+        for (Instruction &i : *bb)
+        {
+            unsigned opcode = i.getOpcode();
+            switch (opcode)
+            {
+                // different cases
+            case llvm::Instruction::Alloca:
+            {
+                // result = alloc type
+                llvm::AllocaInst *allocainst = llvm::dyn_cast<llvm::AllocaInst>(&i);
+                llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+                if (min_vals.count(result))
+                {
+                    min_vals.erase(result);
+                }
+                if (max_vals.count(result))
+                {
+                    max_vals.erase(result);
+                }
+
+                break;
+            }
+            case llvm::Instruction::Add:
+            {
+                // result = biop type operand0, operand1
+                llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                llvm::Value *operand0 = binaryinst->getOperand(0);
+                llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+
+                int _min = getMinVal(op0) + getMinVal(op1);
+                int _max = getMaxVal(op0) + getMaxVal(op1);
+
+                update_MinVals(result, _min);
+                update_MaxVals(result, _max);
+                break;
+            }
+            case llvm::Instruction::Sub:
+            {
+                llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                llvm::Value *operand0 = binaryinst->getOperand(0);
+                llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+
+                int _min = getMinVal(op0) - getMaxVal(op1);
+                int _max = getMaxVal(op0) + getMinVal(op1);
+
+                update_MinVals(result, _min);
+                update_MaxVals(result, _max);
+                break;
+            }
+            case llvm::Instruction::Mul:
+            {
+                llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                llvm::Value *operand0 = binaryinst->getOperand(0);
+                llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+
+                std::vector<int> min_max = getMinMaxPair(op0, op1, '*');
+                int _min = min_max[0];
+                int _max = min_max[1];
+                update_MinVals(result, _min);
+                update_MaxVals(result, _max);
+                break;
+            }
+            case llvm::Instruction::SDiv:
+            {
+                llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                llvm::Value *operand0 = binaryinst->getOperand(0);
+                llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+
+                std::vector<int> min_max = getMinMaxPair(op0, op1, '/');
+                int _min = min_max[0];
+                int _max = min_max[1];
+                update_MinVals(result, _min);
+                update_MaxVals(result, _max);
+                break;
+            }
+            case llvm::Instruction::SRem:
+            {
+                llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
+                llvm::Value *operand0 = binaryinst->getOperand(0);
+                llvm::Value *operand1 = binaryinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+
+                std::vector<int> min_max = getMinMaxPair(op0, op1, '%');
+                int _min = min_max[0];
+                int _max = min_max[1];
+                update_MinVals(result, _min);
+                update_MaxVals(result, _max);
+                break;
+            }
+            case llvm::Instruction::Load:
+            {
+                llvm::LoadInst *loadinst = llvm::dyn_cast<llvm::LoadInst>(&i);
+                llvm::Value *operand = loadinst->getOperand(0);
+                std::string op = getOpLabel(operand);
+
+                llvm::Value *returnval = llvm::cast<llvm::Value>(loadinst);
+                std::string result = getOpLabel(returnval);
+                var_names.insert(result);
+
+                int _min = getMinVal(op);
+                int _max = getMaxVal(op);
+
+                update_MinVals(result, _min);
+                update_MaxVals(result, _max);
+                break;
+            }
+            case llvm::Instruction::Store:
+            {
+                // store op0 -> op1
+                llvm::StoreInst *storeinst = llvm::dyn_cast<llvm::StoreInst>(&i);
+                llvm::Value *operand0 = storeinst->getOperand(0);
+                llvm::Value *operand1 = storeinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                int _min = getMinVal(op0);
+                int _max = getMaxVal(op0);
+
+                update_MinVals(op1, _min);
+                update_MaxVals(op1, _max);
+                break;
+            }
+            case llvm::Instruction::ICmp:
+            {
+                llvm::ICmpInst *icmpinst = llvm::dyn_cast<llvm::ICmpInst>(&i);
+                llvm::Value *operand0 = icmpinst->getOperand(0);
+                llvm::Value *operand1 = icmpinst->getOperand(1);
+
+                std::string op0 = getOpLabel(operand0);
+                std::string op1 = getOpLabel(operand1);
+
+                int min0 = getMinVal(op0);
+                int max0 = getMaxVal(op0);
+
+                int min1 = getMinVal(op1);
+                int max1 = getMaxVal(op1);
+
+                llvm::CmpInst::Predicate predicate = icmpinst->getPredicate();
+                switch (predicate)
+                {
+                case llvm::CmpInst::ICMP_EQ:
+                {
+                    if (min0 == max0 && min1 == max1)
+                    {
+                        // op0 and op1 are fixed vars
+                        if (min0 == min1)
+                        {
+                            jumpTrue = true;
+                        }
+                        else
+                        {
+                            jumpFalse = true;
+                        }
+                    }
+                    break;
+                }
+                case llvm::CmpInst::ICMP_NE:
+                {
+                    if (min0 == max0 && min1 == max1)
+                    {
+                        // op0 and op1 are fixed vars
+                        if (min0 != min1)
+                        {
+                            jumpTrue = true;
+                        }
+                        else
+                        {
+                            jumpFalse = true;
+                        }
+                    }
+                    break;
+                }
+                case llvm::CmpInst::ICMP_SGT:
+                {
+                    if (min0 > max1)
+                    {
+                        jumpTrue = true;
+                    }
+                    else if (max0 <= min1)
+                    {
+                        jumpFalse = true;
+                    }
+                    break;
+                }
+                case llvm::CmpInst::ICMP_SGE:
+                {
+                    if (min0 >= max1)
+                    {
+                        jumpTrue = true;
+                    }
+                    else if (max0 < min1)
+                    {
+                        jumpFalse = true;
+                    }
+                    break;
+                }
+                case llvm::CmpInst::ICMP_SLT:
+                {
+                    if (max0 < min1)
+                    {
+                        jumpTrue = true;
+                    }
+                    else if (min0 >= max1)
+                    {
+                        jumpFalse = true;
+                    }
+                    break;
+                }
+                case llvm::CmpInst::ICMP_SLE:
+                {
+                    if (max0 <= min1)
+                    {
+                        jumpTrue = true;
+                    }
+                    else if (min0 > max1)
+                    {
+                        jumpFalse = true;
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+                break;
+            }
+            case llvm::Instruction::Br:
+            {
+                llvm::BranchInst *cbrinst = llvm::dyn_cast<llvm::BranchInst>(&i);
+                if (cbrinst->getNumSuccessors() == 2)
+                {
+                    llvm::BasicBlock *trueBB = cbrinst->getSuccessor(0);
+                    llvm::BasicBlock *falseBB = cbrinst->getSuccessor(1);
+                    if (jumpTrue)
+                    {
+                        // avoid falseBB
+                        std::string nameBB = getSimpleNodeLabel(falseBB);
+                        falseBB->setName(nameBB);
+                        avoidBB.insert(nameBB);
+                    }
+                    else if (jumpFalse)
+                    {
+                        // avoid trueBB
+                        std::string nameBB = getSimpleNodeLabel(trueBB);
+                        trueBB->setName(nameBB);
+                        avoidBB.insert(nameBB);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -209,6 +515,9 @@ int main(int argc, char **argv)
         Err.print(argv[0], errs());
         return 1;
     }
+
+    // hash set to store visited bb pointers
+    std::unordered_set<BasicBlock *> visitedBB;
     for (auto &F : *Mod)
     {
         if (strncmp(F.getName().str().c_str(), "main", 4) == 0)
@@ -220,299 +529,34 @@ int main(int argc, char **argv)
                     continue;
                 }
                 std::string bb_name = getSimpleNodeLabel(&bb);
-                bool jumpTrue = false, jumpFalse = false;
-                for (Instruction &i : bb)
+
+                BasicBlock *BB = &bb;
+                visitedBB.insert(BB);
+                // to do add vistedBB for loop
+                Instruction *TermInst = BB->getTerminator();
+
+                // Check if this basic block ends in a unconditional branch that jumps back to already visited block
+                if (BranchInst *BI = dyn_cast<BranchInst>(TermInst))
                 {
-                    unsigned opcode = i.getOpcode();
-                    switch (opcode)
+                    if (BI->isUnconditional())
                     {
-                        // different cases
-                    case llvm::Instruction::Alloca:
-                    {
-                        // result = alloc type
-                        llvm::AllocaInst *allocainst = llvm::dyn_cast<llvm::AllocaInst>(&i);
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-                        if (min_vals.count(result))
+                        BasicBlock *Succ = BI->getSuccessor(0);
+                        Function::iterator loop_head = Function::iterator(Succ);
+                        Function::iterator loop_end = Function::iterator(BB);
+                        if (visitedBB.count(Succ))
                         {
-                            min_vals.erase(result);
-                        }
-                        if (max_vals.count(result))
-                        {
-                            max_vals.erase(result);
-                        }
-
-                        break;
-                    }
-                    case llvm::Instruction::Add:
-                    {
-                        // result = biop type operand0, operand1
-                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
-                        llvm::Value *operand0 = binaryinst->getOperand(0);
-                        llvm::Value *operand1 = binaryinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-
-                        int _min = getMinVal(op0) + getMinVal(op1);
-                        int _max = getMaxVal(op0) + getMaxVal(op1);
-
-                        update_MinVals(result, _min);
-                        update_MaxVals(result, _max);
-                        break;
-                    }
-                    case llvm::Instruction::Sub:
-                    {
-                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
-                        llvm::Value *operand0 = binaryinst->getOperand(0);
-                        llvm::Value *operand1 = binaryinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-
-                        int _min = getMinVal(op0) - getMaxVal(op1);
-                        int _max = getMaxVal(op0) + getMinVal(op1);
-
-                        update_MinVals(result, _min);
-                        update_MaxVals(result, _max);
-                        break;
-                    }
-                    case llvm::Instruction::Mul:
-                    {
-                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
-                        llvm::Value *operand0 = binaryinst->getOperand(0);
-                        llvm::Value *operand1 = binaryinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-
-                        std::vector<int> min_max = getMinMaxPair(op0, op1, '*');
-                        int _min = min_max[0];
-                        int _max = min_max[1];
-                        update_MinVals(result, _min);
-                        update_MaxVals(result, _max);
-                        break;
-                    }
-                    case llvm::Instruction::SDiv:
-                    {
-                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
-                        llvm::Value *operand0 = binaryinst->getOperand(0);
-                        llvm::Value *operand1 = binaryinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-
-                        std::vector<int> min_max = getMinMaxPair(op0, op1, '/');
-                        int _min = min_max[0];
-                        int _max = min_max[1];
-                        update_MinVals(result, _min);
-                        update_MaxVals(result, _max);
-                        break;
-                    }
-                    case llvm::Instruction::SRem:
-                    {
-                        llvm::BinaryOperator *binaryinst = llvm::dyn_cast<llvm::BinaryOperator>(&i);
-                        llvm::Value *operand0 = binaryinst->getOperand(0);
-                        llvm::Value *operand1 = binaryinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(binaryinst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-
-                        std::vector<int> min_max = getMinMaxPair(op0, op1, '%');
-                        int _min = min_max[0];
-                        int _max = min_max[1];
-                        update_MinVals(result, _min);
-                        update_MaxVals(result, _max);
-                        break;
-                    }
-                    case llvm::Instruction::Load:
-                    {
-                        llvm::LoadInst *loadinst = llvm::dyn_cast<llvm::LoadInst>(&i);
-                        llvm::Value *operand = loadinst->getOperand(0);
-                        std::string op = getOpLabel(operand);
-
-                        llvm::Value *returnval = llvm::cast<llvm::Value>(loadinst);
-                        std::string result = getOpLabel(returnval);
-                        var_names.insert(result);
-
-                        int _min = getMinVal(op);
-                        int _max = getMaxVal(op);
-
-                        update_MinVals(result, _min);
-                        update_MaxVals(result, _max);
-                        break;
-                    }
-                    case llvm::Instruction::Store:
-                    {
-                        // store op0 -> op1
-                        llvm::StoreInst *storeinst = llvm::dyn_cast<llvm::StoreInst>(&i);
-                        llvm::Value *operand0 = storeinst->getOperand(0);
-                        llvm::Value *operand1 = storeinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        int _min = getMinVal(op0);
-                        int _max = getMaxVal(op0);
-
-                        update_MinVals(op1, _min);
-                        update_MaxVals(op1, _max);
-                        break;
-                    }
-                    case llvm::Instruction::ICmp:
-                    {
-                        llvm::ICmpInst *icmpinst = llvm::dyn_cast<llvm::ICmpInst>(&i);
-                        llvm::Value *operand0 = icmpinst->getOperand(0);
-                        llvm::Value *operand1 = icmpinst->getOperand(1);
-
-                        std::string op0 = getOpLabel(operand0);
-                        std::string op1 = getOpLabel(operand1);
-
-                        int min0 = getMinVal(op0);
-                        int max0 = getMaxVal(op0);
-
-                        int min1 = getMinVal(op1);
-                        int max1 = getMaxVal(op1);
-
-                        llvm::CmpInst::Predicate predicate = icmpinst->getPredicate();
-                        switch (predicate)
-                        {
-                        case llvm::CmpInst::ICMP_EQ:
-                        {
-                            if (min0 == max0 && min1 == max1)
+                            // This is a while loop body, analyze it for multiple times
+                            int k = 1;
+                            while (k--)
                             {
-                                // op0 and op1 are fixed vars
-                                if (min0 == min1)
-                                {
-                                    jumpTrue = true;
-                                }
-                                else
-                                {
-                                    jumpFalse = true;
-                                }
-                            }
-                            break;
-                        }
-                        case llvm::CmpInst::ICMP_NE:
-                        {
-                            if (min0 == max0 && min1 == max1)
-                            {
-                                // op0 and op1 are fixed vars
-                                if (min0 != min1)
-                                {
-                                    jumpTrue = true;
-                                }
-                                else
-                                {
-                                    jumpFalse = true;
-                                }
-                            }
-                            break;
-                        }
-                        case llvm::CmpInst::ICMP_SGT:
-                        {
-                            if (min0 > max1)
-                            {
-                                jumpTrue = true;
-                            }
-                            else if (max0 <= min1)
-                            {
-                                jumpFalse = true;
-                            }
-                            break;
-                        }
-                        case llvm::CmpInst::ICMP_SGE:
-                        {
-                            if (min0 >= max1)
-                            {
-                                jumpTrue = true;
-                            }
-                            else if (max0 < min1)
-                            {
-                                jumpFalse = true;
-                            }
-                            break;
-                        }
-                        case llvm::CmpInst::ICMP_SLT:
-                        {
-                            if (max0 < min1)
-                            {
-                                jumpTrue = true;
-                            }
-                            else if (min0 >= max1)
-                            {
-                                jumpFalse = true;
-                            }
-                            break;
-                        }
-                        case llvm::CmpInst::ICMP_SLE:
-                        {
-                            if (max0 <= min1)
-                            {
-                                jumpTrue = true;
-                            }
-                            else if (min0 > max1)
-                            {
-                                jumpFalse = true;
-                            }
-                            break;
-                        }
-                        default:
-                            break;
-                        }
-                        break;
-                    }
-                    case llvm::Instruction::Br:
-                    {
-                        llvm::BranchInst *cbrinst = llvm::dyn_cast<llvm::BranchInst>(&i);
-                        if (cbrinst->getNumSuccessors() == 2)
-                        {
-                            llvm::BasicBlock *trueBB = cbrinst->getSuccessor(0);
-                            llvm::BasicBlock *falseBB = cbrinst->getSuccessor(1);
-                            if (jumpTrue)
-                            {
-                                // avoid falseBB
-                                std::string nameBB = getSimpleNodeLabel(falseBB);
-                                falseBB->setName(nameBB);
-                                avoidBB.insert(nameBB);
-                            }
-                            else if (jumpFalse)
-                            {
-                                // avoid trueBB
-                                std::string nameBB = getSimpleNodeLabel(trueBB);
-                                trueBB->setName(nameBB);
-                                avoidBB.insert(nameBB);
+                                analyzeBB(loop_head, loop_end, avoidBBLoop);
                             }
                         }
-                        break;
-                    }
-                    default:
-                        break;
                     }
                 }
 
-                //
+                analyzeBB(F.begin(), F.end(), avoidBB);
+
                 llvm::outs() << bb_name << ": " << '\n';
                 cal_interval();
             }
