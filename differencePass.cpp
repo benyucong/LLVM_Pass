@@ -74,11 +74,11 @@ void update_MaxVals(std::string res, int num)
 std::vector<int> getMinMaxPair(std::string op0, std::string op1, char cal)
 {
     std::vector<int> ans;
-    int op0_min = min_vals.count(op0) ? min_vals[op0] : -INF;
-    int op0_max = max_vals.count(op0) ? max_vals[op0] : INF;
+    int op0_min = getMinVal(op0);
+    int op0_max = getMaxVal(op0);
 
-    int op1_min = min_vals.count(op1) ? min_vals[op1] : -INF;
-    int op1_max = max_vals.count(op1) ? max_vals[op1] : INF;
+    int op1_min = getMinVal(op1);
+    int op1_max = getMaxVal(op1);
 
     if (cal == '*')
     {
