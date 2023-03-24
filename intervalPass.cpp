@@ -29,7 +29,7 @@ using namespace llvm;
 
 std::unordered_map<std::string, int> min_vals;
 std::unordered_map<std::string, int> max_vals;
-std::unordered_set<std::string> var_names;
+std::set<std::string> var_names;
 std::unordered_set<std::string> avoidBB;
 std::unordered_set<std::string> avoidBBLoop;
 
@@ -196,8 +196,8 @@ char GVNames::ID = 0;
 
 void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::unordered_set<std::string> &avoidBB)
 {
-    avoidBB.clear();
     bool jumpTrue = false, jumpFalse = false;
+    loopTail++;
 
     for (auto it = loopHead; it != loopTail; ++it)
     {
@@ -219,14 +219,14 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
                 std::string result = getOpLabel(returnval);
                 var_names.insert(result);
-                if (min_vals.count(result))
-                {
-                    min_vals.erase(result);
-                }
-                if (max_vals.count(result))
-                {
-                    max_vals.erase(result);
-                }
+                // if (min_vals.count(result))
+                // {
+                //     min_vals.erase(result);
+                // }
+                // if (max_vals.count(result))
+                // {
+                //     max_vals.erase(result);
+                // }
 
                 break;
             }
@@ -248,7 +248,9 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 int _max = getMaxVal(op0) + getMaxVal(op1);
 
                 update_MinVals(result, _min);
+
                 update_MaxVals(result, _max);
+
                 break;
             }
             case llvm::Instruction::Sub:
@@ -265,10 +267,12 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 var_names.insert(result);
 
                 int _min = getMinVal(op0) - getMaxVal(op1);
-                int _max = getMaxVal(op0) + getMinVal(op1);
+                int _max = getMaxVal(op0) - getMinVal(op1);
 
                 update_MinVals(result, _min);
+
                 update_MaxVals(result, _max);
+
                 break;
             }
             case llvm::Instruction::Mul:
@@ -287,8 +291,11 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 std::vector<int> min_max = getMinMaxPair(op0, op1, '*');
                 int _min = min_max[0];
                 int _max = min_max[1];
+
                 update_MinVals(result, _min);
+
                 update_MaxVals(result, _max);
+
                 break;
             }
             case llvm::Instruction::SDiv:
@@ -307,8 +314,11 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 std::vector<int> min_max = getMinMaxPair(op0, op1, '/');
                 int _min = min_max[0];
                 int _max = min_max[1];
+
                 update_MinVals(result, _min);
+
                 update_MaxVals(result, _max);
+
                 break;
             }
             case llvm::Instruction::SRem:
@@ -327,8 +337,11 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 std::vector<int> min_max = getMinMaxPair(op0, op1, '%');
                 int _min = min_max[0];
                 int _max = min_max[1];
+
                 update_MinVals(result, _min);
+
                 update_MaxVals(result, _max);
+
                 break;
             }
             case llvm::Instruction::Load:
@@ -346,6 +359,7 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
 
                 update_MinVals(result, _min);
                 update_MaxVals(result, _max);
+
                 break;
             }
             case llvm::Instruction::Store:
@@ -362,7 +376,9 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
                 int _max = getMaxVal(op0);
 
                 update_MinVals(op1, _min);
+
                 update_MaxVals(op1, _max);
+
                 break;
             }
             case llvm::Instruction::ICmp:
@@ -499,6 +515,23 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
     }
 }
 
+bool jumpBack(BasicBlock *curBB, BasicBlock *otherBB)
+{
+    std::string cur_str = getSimpleNodeLabel(curBB).substr(1);
+    std::string other_str = getSimpleNodeLabel(otherBB).substr(1);
+
+    int cur_num = std::stoi(cur_str);
+    int other_num = std::stoi(other_str);
+    if (other_num <= cur_num)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -516,8 +549,19 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // hash set to store visited bb pointers
-    std::unordered_set<BasicBlock *> visitedBB;
+    // Set each block's name first
+    for (auto &F : *Mod)
+    {
+        if (strncmp(F.getName().str().c_str(), "main", 4) == 0)
+        {
+            for (BasicBlock &bb : F)
+            {
+                std::string bbName = getSimpleNodeLabel(&bb);
+                bb.setName(bbName);
+            }
+        }
+    }
+
     for (auto &F : *Mod)
     {
         if (strncmp(F.getName().str().c_str(), "main", 4) == 0)
@@ -528,14 +572,13 @@ int main(int argc, char **argv)
                 {
                     continue;
                 }
+
                 std::string bb_name = getSimpleNodeLabel(&bb);
 
                 BasicBlock *BB = &bb;
-                visitedBB.insert(BB);
-                // to do add vistedBB for loop
                 Instruction *TermInst = BB->getTerminator();
 
-                // Check if this basic block ends in a unconditional branch that jumps back to already visited block
+                // Check if this basic block ends in a unconditional branch that jumps back to smaller num block
                 if (BranchInst *BI = dyn_cast<BranchInst>(TermInst))
                 {
                     if (BI->isUnconditional())
@@ -543,23 +586,51 @@ int main(int argc, char **argv)
                         BasicBlock *Succ = BI->getSuccessor(0);
                         Function::iterator loop_head = Function::iterator(Succ);
                         Function::iterator loop_end = Function::iterator(BB);
-                        if (visitedBB.count(Succ))
+                        if (jumpBack(BB, Succ))
                         {
                             // This is a while loop body, analyze it for multiple times
-                            int k = 1;
-                            while (k--)
+                            std::unordered_map<std::string, int> cur_min_vals = min_vals;
+                            std::unordered_map<std::string, int> cur_max_vals = max_vals;
+
+                            int loopTimes = 600;
+                            int threshHold = 500;
+                            while (loopTimes--)
                             {
+                                avoidBBLoop.clear();
                                 analyzeBB(loop_head, loop_end, avoidBBLoop);
+
+                                for (auto it = min_vals.begin(); it != min_vals.end(); it++)
+                                {
+                                    std::string key = it->first;
+                                    if (it->second <= -threshHold && cur_min_vals.count(key))
+                                    {
+                                        cur_min_vals.erase(key);
+                                        continue;
+                                    }
+                                    cur_min_vals[key] = cur_min_vals.count(key) ? std::min(it->second, cur_min_vals[key]) : it->second;
+                                }
+                                for (auto it = max_vals.begin(); it != max_vals.end(); it++)
+                                {
+                                    std::string key = it->first;
+                                    if (it->second >= threshHold && cur_max_vals.count(key))
+                                    {
+                                        cur_max_vals.erase(key);
+                                        continue;
+                                    }
+                                    cur_max_vals[key] = cur_max_vals.count(key) ? std::max(it->second, cur_max_vals[key]) : it->second;
+                                }
+                                min_vals = cur_min_vals;
+                                max_vals = cur_max_vals;
                             }
                         }
                     }
                 }
 
-                analyzeBB(F.begin(), F.end(), avoidBB);
-
-                llvm::outs() << bb_name << ": " << '\n';
-                cal_interval();
+                Function::iterator curBB = Function::iterator(BB);
+                analyzeBB(curBB, curBB, avoidBB);
+                // llvm::outs() << bb_name << ": " << '\n';
             }
         }
+        cal_interval();
     }
 }

@@ -17,9 +17,7 @@ int main()
         }
         else
         {
-
             x = x - 2;
-
             y = 1;
         }
         if (b > 0)
