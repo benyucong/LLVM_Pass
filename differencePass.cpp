@@ -25,7 +25,7 @@
 
 using namespace llvm;
 
-#define INF 0x3f3f3f3f
+#define INF 10000
 
 std::unordered_map<std::string, int> min_vals;
 std::unordered_map<std::string, int> max_vals;
@@ -445,7 +445,7 @@ int main(int argc, char **argv)
                         if (visitedBB.count(Succ))
                         {
                             // This is a while loop body, analyze it for multiple times
-                            int k = 10;
+                            int k = INF * 2;
                             while (k--)
                             {
                                 analyzeBB(bb);
@@ -455,11 +455,8 @@ int main(int argc, char **argv)
                 }
 
                 analyzeBB(bb);
-
-                std::string bb_name = getSimpleNodeLabel(&bb);
-                llvm::outs() << bb_name << ": " << '\n';
-                cal_diff();
             }
         }
     }
+    cal_diff();
 }

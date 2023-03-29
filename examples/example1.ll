@@ -5,40 +5,41 @@ target triple = "aarch64-unknown-linux-gnu"
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local i32 @main() #0 {
-  %1 = alloca i32, align 4
-  %2 = alloca i32, align 4
-  %3 = alloca i32, align 4
-  %4 = alloca i32, align 4
-  %5 = alloca i32, align 4
-  store i32 0, i32* %1, align 4
-  store i32 0, i32* %5, align 4
-  %6 = load i32, i32* %2, align 4
-  %7 = icmp slt i32 %6, -10
-  br i1 %7, label %8, label %9
+entry:
+  %retval = alloca i32, align 4
+  %w = alloca i32, align 4
+  %x = alloca i32, align 4
+  %y = alloca i32, align 4
+  %z = alloca i32, align 4
+  store i32 0, i32* %retval, align 4
+  store i32 0, i32* %z, align 4
+  %0 = load i32, i32* %w, align 4
+  %cmp = icmp slt i32 %0, -10
+  br i1 %cmp, label %if.then, label %if.else
 
-8:                                                ; preds = %0
-  store i32 2, i32* %3, align 4
-  br label %10
+if.then:                                          ; preds = %entry
+  store i32 2, i32* %x, align 4
+  br label %if.end
 
-9:                                                ; preds = %0
-  store i32 -4, i32* %3, align 4
-  br label %10
+if.else:                                          ; preds = %entry
+  store i32 -4, i32* %x, align 4
+  br label %if.end
 
-10:                                               ; preds = %9, %8
-  %11 = load i32, i32* %3, align 4
-  %12 = add nsw i32 %11, 10
-  store i32 %12, i32* %3, align 4
-  %13 = load i32, i32* %4, align 4
-  %14 = icmp ne i32 %13, 10
-  br i1 %14, label %15, label %16
+if.end:                                           ; preds = %if.else, %if.then
+  %1 = load i32, i32* %x, align 4
+  %add = add nsw i32 %1, 10
+  store i32 %add, i32* %x, align 4
+  %2 = load i32, i32* %y, align 4
+  %cmp1 = icmp ne i32 %2, 10
+  br i1 %cmp1, label %if.then2, label %if.end3
 
-15:                                               ; preds = %10
-  store i32 50, i32* %5, align 4
-  br label %16
+if.then2:                                         ; preds = %if.end
+  store i32 50, i32* %z, align 4
+  br label %if.end3
 
-16:                                               ; preds = %15, %10
-  %17 = load i32, i32* %1, align 4
-  ret i32 %17
+if.end3:                                          ; preds = %if.then2, %if.end
+  %3 = load i32, i32* %retval, align 4
+  ret i32 %3
 }
 
 attributes #0 = { noinline nounwind optnone uwtable "frame-pointer"="non-leaf" "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+neon,+outline-atomics,+v8a" }

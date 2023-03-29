@@ -9,43 +9,44 @@ target triple = "aarch64-unknown-linux-gnu"
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local i32 @main() #0 {
-  %1 = alloca i32, align 4
-  %2 = alloca i32, align 4
-  %3 = alloca i32, align 4
-  %4 = alloca i32, align 4
-  store i32 0, i32* %1, align 4
-  store i32 10, i32* %4, align 4
-  %5 = load i32, i32* %3, align 4
-  %6 = icmp eq i32 %5, 10
-  br i1 %6, label %7, label %10
+entry:
+  %retval = alloca i32, align 4
+  %x = alloca i32, align 4
+  %y = alloca i32, align 4
+  %z = alloca i32, align 4
+  store i32 0, i32* %retval, align 4
+  store i32 10, i32* %z, align 4
+  %0 = load i32, i32* %y, align 4
+  %cmp = icmp eq i32 %0, 10
+  br i1 %cmp, label %if.then, label %if.else
 
-7:                                                ; preds = %0
-  %8 = load i32, i32* %4, align 4
-  %9 = add nsw i32 %8, 0
-  store i32 %9, i32* %2, align 4
-  br label %13
+if.then:                                          ; preds = %entry
+  %1 = load i32, i32* %z, align 4
+  %add = add nsw i32 %1, 0
+  store i32 %add, i32* %x, align 4
+  br label %if.end
 
-10:                                               ; preds = %0
-  %11 = load i32, i32* %4, align 4
-  %12 = sub nsw i32 %11, 10
-  store i32 %12, i32* %2, align 4
-  br label %13
+if.else:                                          ; preds = %entry
+  %2 = load i32, i32* %z, align 4
+  %sub = sub nsw i32 %2, 10
+  store i32 %sub, i32* %x, align 4
+  br label %if.end
 
-13:                                               ; preds = %10, %7
-  %14 = load i32, i32* %2, align 4
-  %15 = icmp slt i32 %14, 11
-  br i1 %15, label %16, label %17
+if.end:                                           ; preds = %if.else, %if.then
+  %3 = load i32, i32* %x, align 4
+  %cmp1 = icmp slt i32 %3, 11
+  br i1 %cmp1, label %if.then2, label %if.else3
 
-16:                                               ; preds = %13
-  br label %18
+if.then2:                                         ; preds = %if.end
+  br label %if.end4
 
-17:                                               ; preds = %13
+if.else3:                                         ; preds = %if.end
   call void @__assert_fail(i8* noundef getelementptr inbounds ([7 x i8], [7 x i8]* @.str, i64 0, i64 0), i8* noundef getelementptr inbounds ([11 x i8], [11 x i8]* @.str.1, i64 0, i64 0), i32 noundef 9, i8* noundef getelementptr inbounds ([11 x i8], [11 x i8]* @__PRETTY_FUNCTION__.main, i64 0, i64 0)) #2
   unreachable
 
-18:                                               ; preds = %16
-  %19 = load i32, i32* %2, align 4
-  ret i32 %19
+if.end4:                                          ; preds = %if.then2
+  %4 = load i32, i32* %x, align 4
+  ret i32 %4
 }
 
 ; Function Attrs: noreturn nounwind

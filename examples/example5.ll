@@ -5,66 +5,67 @@ target triple = "aarch64-unknown-linux-gnu"
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local i32 @main() #0 {
-  %1 = alloca i32, align 4
-  %2 = alloca i32, align 4
-  %3 = alloca i32, align 4
-  %4 = alloca i32, align 4
-  %5 = alloca i32, align 4
-  %6 = alloca i32, align 4
-  %7 = alloca i32, align 4
-  store i32 0, i32* %1, align 4
-  store i32 -2, i32* %2, align 4
-  store i32 5, i32* %3, align 4
-  store i32 0, i32* %4, align 4
-  store i32 0, i32* %7, align 4
-  br label %8
+entry:
+  %retval = alloca i32, align 4
+  %a = alloca i32, align 4
+  %b = alloca i32, align 4
+  %x = alloca i32, align 4
+  %y = alloca i32, align 4
+  %N = alloca i32, align 4
+  %i = alloca i32, align 4
+  store i32 0, i32* %retval, align 4
+  store i32 -2, i32* %a, align 4
+  store i32 5, i32* %b, align 4
+  store i32 0, i32* %x, align 4
+  store i32 0, i32* %i, align 4
+  br label %while.cond
 
-8:                                                ; preds = %27, %0
-  %9 = load i32, i32* %7, align 4
-  %10 = add nsw i32 %9, 1
-  store i32 %10, i32* %7, align 4
-  %11 = load i32, i32* %6, align 4
-  %12 = icmp slt i32 %9, %11
-  br i1 %12, label %13, label %28
+while.cond:                                       ; preds = %if.end5, %entry
+  %0 = load i32, i32* %i, align 4
+  %inc = add nsw i32 %0, 1
+  store i32 %inc, i32* %i, align 4
+  %1 = load i32, i32* %N, align 4
+  %cmp = icmp slt i32 %0, %1
+  br i1 %cmp, label %while.body, label %while.end
 
-13:                                               ; preds = %8
-  %14 = load i32, i32* %2, align 4
-  %15 = icmp sgt i32 %14, 0
-  br i1 %15, label %16, label %19
+while.body:                                       ; preds = %while.cond
+  %2 = load i32, i32* %a, align 4
+  %cmp1 = icmp sgt i32 %2, 0
+  br i1 %cmp1, label %if.then, label %if.else
 
-16:                                               ; preds = %13
-  %17 = load i32, i32* %4, align 4
-  %18 = add nsw i32 %17, 7
-  store i32 %18, i32* %4, align 4
-  store i32 5, i32* %5, align 4
-  br label %22
+if.then:                                          ; preds = %while.body
+  %3 = load i32, i32* %x, align 4
+  %add = add nsw i32 %3, 7
+  store i32 %add, i32* %x, align 4
+  store i32 5, i32* %y, align 4
+  br label %if.end
 
-19:                                               ; preds = %13
-  %20 = load i32, i32* %4, align 4
-  %21 = sub nsw i32 %20, 2
-  store i32 %21, i32* %4, align 4
-  store i32 1, i32* %5, align 4
-  br label %22
+if.else:                                          ; preds = %while.body
+  %4 = load i32, i32* %x, align 4
+  %sub = sub nsw i32 %4, 2
+  store i32 %sub, i32* %x, align 4
+  store i32 1, i32* %y, align 4
+  br label %if.end
 
-22:                                               ; preds = %19, %16
-  %23 = load i32, i32* %3, align 4
-  %24 = icmp sgt i32 %23, 0
-  br i1 %24, label %25, label %26
+if.end:                                           ; preds = %if.else, %if.then
+  %5 = load i32, i32* %b, align 4
+  %cmp2 = icmp sgt i32 %5, 0
+  br i1 %cmp2, label %if.then3, label %if.else4
 
-25:                                               ; preds = %22
-  store i32 6, i32* %2, align 4
-  br label %27
+if.then3:                                         ; preds = %if.end
+  store i32 6, i32* %a, align 4
+  br label %if.end5
 
-26:                                               ; preds = %22
-  store i32 -5, i32* %2, align 4
-  br label %27
+if.else4:                                         ; preds = %if.end
+  store i32 -5, i32* %a, align 4
+  br label %if.end5
 
-27:                                               ; preds = %26, %25
-  br label %8, !llvm.loop !10
+if.end5:                                          ; preds = %if.else4, %if.then3
+  br label %while.cond, !llvm.loop !10
 
-28:                                               ; preds = %8
-  %29 = load i32, i32* %1, align 4
-  ret i32 %29
+while.end:                                        ; preds = %while.cond
+  %6 = load i32, i32* %retval, align 4
+  ret i32 %6
 }
 
 attributes #0 = { noinline nounwind optnone uwtable "frame-pointer"="non-leaf" "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="generic" "target-features"="+neon,+outline-atomics,+v8a" }
