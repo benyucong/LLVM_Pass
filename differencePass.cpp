@@ -33,7 +33,7 @@ std::unordered_set<std::string> var_names;
 
 int getMinVal(std::string op)
 {
-    if (op[0] != '%')
+    if (op[0] <= '9' && op[0] >= '0')
     {
         // if op is constant return the number
         return std::stoi(op);
@@ -53,7 +53,7 @@ void update_MinVals(std::string res, int num)
 
 int getMaxVal(std::string op)
 {
-    if (op[0] != '%')
+    if (op[0] <= '9' && op[0] >= '0')
     {
         // if op is constant return the number
         return std::stoi(op);
@@ -216,10 +216,11 @@ void analyzeBB(BasicBlock &bb)
         case llvm::Instruction::Alloca:
         {
             // result = alloc type
-            // llvm::AllocaInst *allocainst = llvm::dyn_cast<llvm::AllocaInst>(&i);
-            // llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
-            // std::string result = getOpLabel(returnval);
-            // var_names.insert(result);
+            llvm::AllocaInst *allocainst = llvm::dyn_cast<llvm::AllocaInst>(&i);
+            llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
+            std::string result = getOpLabel(returnval);
+            var_names.insert(result);
+            std::cout << "alloc var: " << result << std::endl;
             // if (min_vals.count(result))
             // {
             //     min_vals.erase(result);
