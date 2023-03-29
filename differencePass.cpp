@@ -33,7 +33,8 @@ std::unordered_set<std::string> var_names;
 
 int getMinVal(std::string op)
 {
-    if (op[0] <= '9' && op[0] >= '0')
+    // std::cout << "current op is " << op << std::endl;
+    if ((op[0] <= '9' && op[0] >= '0') || op[0] == '-')
     {
         // if op is constant return the number
         return std::stoi(op);
@@ -53,7 +54,8 @@ void update_MinVals(std::string res, int num)
 
 int getMaxVal(std::string op)
 {
-    if (op[0] <= '9' && op[0] >= '0')
+    // std::cout << "current op is " << op << std::endl;
+    if ((op[0] <= '9' && op[0] >= '0') || op[0] == '-')
     {
         // if op is constant return the number
         return std::stoi(op);
@@ -74,17 +76,17 @@ void update_MaxVals(std::string res, int num)
 std::vector<int> getMinMaxPair(std::string op0, std::string op1, char cal)
 {
     std::vector<int> ans;
-    int op0_min = getMinVal(op0);
-    int op0_max = getMaxVal(op0);
+    int a = getMinVal(op0);
+    int b = getMaxVal(op0);
 
-    int op1_min = getMinVal(op1);
-    int op1_max = getMaxVal(op1);
+    int c = getMinVal(op1);
+    int d = getMaxVal(op1);
 
     if (cal == '*')
     {
-        for (int x : {op0_min, op0_max})
+        for (int x : {a, b})
         {
-            for (int y : {op1_min, op1_max})
+            for (int y : {c, d})
             {
                 ans.push_back(x * y);
             }
@@ -92,17 +94,46 @@ std::vector<int> getMinMaxPair(std::string op0, std::string op1, char cal)
     }
     else if (cal == '/')
     {
-        for (int x : {op0_min, op0_max})
+        if (c == 0 && d == 0)
         {
-            for (int y : {op1_min, op1_max})
+            return {-INF, INF};
+        }
+        else if (c >= 0)
+        {
+            for (int x : {a, b})
             {
-                ans.push_back(x / y);
+                for (int y : {c, d})
+                {
+                    ans.push_back(x / y);
+                }
+            }
+        }
+        else if (d <= 0)
+        {
+            for (int x : {-b, -a})
+            {
+                for (int y : {-d, -c})
+                {
+                    ans.push_back(x / y);
+                }
+            }
+        }
+        else
+        {
+            for (int x : {a, b})
+            {
+                for (auto y : {c, d})
+                {
+                    ans.push_back(x / y);
+                }
+                ans.push_back(x * INF);
+                ans.push_back(x * (-INF));
             }
         }
     }
     else if (cal == '%')
     {
-        ans.push_back(op1_max - 1);
+        ans.push_back(d - 1);
         ans.push_back(0);
     }
     else
@@ -141,9 +172,12 @@ void cal_diff()
         {
             std::string name0 = *i;
             std::string name1 = *j;
-            int diff = max_diff(name0, name1);
-            std::string diff_str = diff >= INF ? "INF" : std::to_string(diff);
-            llvm::outs() << "Difference between " << name0 << " and " << name1 << ": " << diff_str << '\n';
+            if (name0[0] != '%' && name1[0] != '%')
+            {
+                int diff = max_diff(name0, name1);
+                std::string diff_str = diff >= INF ? "INF" : std::to_string(diff);
+                llvm::outs() << "Difference between " << name0 << " and " << name1 << ": " << diff_str << '\n';
+            }
             std::advance(j, 1);
         }
     }
@@ -219,8 +253,9 @@ void analyzeBB(BasicBlock &bb)
             llvm::AllocaInst *allocainst = llvm::dyn_cast<llvm::AllocaInst>(&i);
             llvm::Value *returnval = llvm::cast<llvm::Value>(allocainst);
             std::string result = getOpLabel(returnval);
+
             var_names.insert(result);
-            std::cout << "alloc var: " << result << std::endl;
+            // std::cout << "alloc var: " << result << std::endl;
             // if (min_vals.count(result))
             // {
             //     min_vals.erase(result);
