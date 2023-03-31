@@ -424,8 +424,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // hash set to store visited bb pointers
-    std::unordered_set<BasicBlock *> visitedBB;
     for (auto &F : *Mod)
     {
         if (strncmp(F.getName().str().c_str(), "main", 4) == 0)
@@ -433,24 +431,17 @@ int main(int argc, char **argv)
             for (BasicBlock &bb : F)
             {
                 BasicBlock *BB = &bb;
-                visitedBB.insert(BB);
+                std::string bb_name = BB->getName().str();
                 Instruction *TermInst = BB->getTerminator();
 
                 // Check if this basic block ends in a unconditional branch that jumps back to already visited block
-                if (BranchInst *BI = dyn_cast<BranchInst>(TermInst))
+                if (bb_name.size() >= 10 && bb_name.substr(0, 10) == "while.body")
                 {
-                    if (BI->isUnconditional())
+                    // This is a while loop body, analyze it for multiple times
+                    int k = INF * 2;
+                    while (k--)
                     {
-                        BasicBlock *Succ = BI->getSuccessor(0);
-                        if (visitedBB.count(Succ))
-                        {
-                            // This is a while loop body, analyze it for multiple times
-                            int k = INF * 2;
-                            while (k--)
-                            {
-                                analyzeBB(bb);
-                            }
-                        }
+                        analyzeBB(bb);
                     }
                 }
 

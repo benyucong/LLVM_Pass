@@ -272,7 +272,6 @@ void analyzeBB(Function::iterator loopHead, Function::iterator loopTail, std::un
             }
             if (avoidBB.count("if.then" + bb_name_suffix) == 0 && avoidBB.count("if.else" + bb_name_suffix) == 0)
             {
-                std::cout << "set if_flag" << std::endl;
                 if_flag = true;
             }
         }
